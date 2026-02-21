@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #090c13;
+  --foreground: #e4e7ef;
 }
 
 @theme inline {
@@ -12,15 +12,96 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+body {
+  background:
+    radial-gradient(1100px 700px at 15% -10%, #1d2639 0%, transparent 60%),
+    radial-gradient(1000px 700px at 120% 20%, #182739 0%, transparent 60%),
+    var(--background);
+  color: var(--foreground);
+  min-height: 100vh;
+  font-family: var(--font-geist-sans), "Segoe UI", sans-serif;
+}
+
+@keyframes modalFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes modalRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-backdrop {
+  animation: modalFade 160ms ease-out;
+  backdrop-filter: blur(4px);
+}
+
+.modal-card {
+  animation: modalRise 180ms ease-out;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.45);
+}
+
+.fc {
+  --fc-border-color: rgba(255, 255, 255, 0.08);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: rgba(255, 255, 255, 0.03);
+  --fc-list-event-hover-bg-color: rgba(255, 255, 255, 0.06);
+  --fc-today-bg-color: rgba(34, 211, 238, 0.08);
+  --fc-event-bg-color: #22d3ee;
+  --fc-event-border-color: #22d3ee;
+  --fc-event-text-color: #001018;
+  --fc-button-bg-color: #1b2334;
+  --fc-button-border-color: rgba(255, 255, 255, 0.1);
+  --fc-button-text-color: #eef2ff;
+  --fc-button-hover-bg-color: #26324c;
+  --fc-button-hover-border-color: rgba(255, 255, 255, 0.2);
+  --fc-button-active-bg-color: #0ea5b7;
+  --fc-button-active-border-color: #0ea5b7;
+}
+
+.fc .fc-toolbar.fc-header-toolbar {
+  margin-bottom: 1.3rem;
+}
+
+.fc .fc-toolbar-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.fc .fc-button {
+  border-radius: 0.7rem;
+  box-shadow: none !important;
+  text-transform: capitalize;
+}
+
+.fc .fc-daygrid-day,
+.fc .fc-timegrid-slot {
+  background: rgba(10, 15, 24, 0.45);
+}
+
+.fc .fc-scrollgrid {
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.fc .fc-col-header-cell-cushion,
+.fc .fc-daygrid-day-number,
+.fc .fc-timegrid-axis-cushion {
+  color: #b6bfd5;
+}
+
+.fc .fc-timegrid-now-indicator-line {
+  border-color: #22d3ee;
 }
