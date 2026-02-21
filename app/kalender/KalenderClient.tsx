@@ -5,34 +5,21 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin, { DateClickArg } from "@fullcalendar/interaction";
-import { EventClickArg, EventInput } from "@fullcalendar/core";
+import { EventClickArg } from "@fullcalendar/core";
+import { CalendarEvent } from "@/lib/shared/types";
+import { findUser, isUserId, USERS, UserId } from "@/lib/shared/users";
 
-const USERS = [
-  { id: "rino", name: "Rino", color: "#22d3ee", textColor: "#001016" },
-  { id: "iselin", name: "Iselin", color: "#f59e0b", textColor: "#1f1300" },
-  { id: "fia", name: "Fia", color: "#a3e635", textColor: "#132000" },
-  { id: "rakel", name: "Rakel", color: "#fb7185", textColor: "#22040a" },
-  { id: "hugo", name: "Hugo", color: "#818cf8", textColor: "#060c25" },
-] as const;
-
-type User = (typeof USERS)[number];
-type UserId = User["id"];
 type ModalState =
   | { type: "create"; date: string }
   | { type: "details"; eventId: string }
   | null;
 
-type CalendarEvent = EventInput & { id: string; ownerId: UserId };
-
-const STORAGE_KEYS = {
-  user: "familie-app-user-v1",
-  events: "familie-app-events-v1",
-  reminders: "familie-app-reminders-v1",
-} as const;
+const STORAGE_KEY_USER = "familie-app-user-v1";
 
 export default function KalenderClient() {
-  const [events, setEvents] = useState<CalendarEvent[]>(() => loadInitialEvents());
-  const [currentUserId, setCurrentUserId] = useState<UserId | null>(() => loadInitialUser());
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<UserId | null>(loadInitialUser());
   const [modal, setModal] = useState<ModalState>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDate, setDraftDate] = useState("");
@@ -40,10 +27,9 @@ export default function KalenderClient() {
   const [draftEndTime, setDraftEndTime] = useState("10:00");
   const [isAllDay, setIsAllDay] = useState(false);
   const [createError, setCreateError] = useState("");
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() =>
-    loadNotificationPermission(),
-  );
-  const firedRemindersRef = useRef<Set<string>>(loadReminderKeys());
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
 
   const selectedEvent = useMemo(() => {
     if (!modal || modal.type !== "details") {
@@ -55,49 +41,60 @@ export default function KalenderClient() {
   const currentUser = USERS.find((user) => user.id === currentUserId) ?? null;
 
   useEffect(() => {
+    void refreshEvents();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof Notification === "undefined") {
+      return;
+    }
+    setNotificationPermission(Notification.permission);
+  }, []);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
-    localStorage.setItem(STORAGE_KEYS.events, JSON.stringify(events));
-  }, [events]);
+
+    let mounted = true;
+    const setup = async () => {
+      if (!("serviceWorker" in navigator)) {
+        return;
+      }
+      try {
+        const registration = await navigator.serviceWorker.register("/sw.js");
+        if (!mounted) {
+          return;
+        }
+        swRegistrationRef.current = registration;
+      } catch {
+        // Ignore service worker registration failures.
+      }
+    };
+    void setup();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
-    if (notificationPermission !== "granted" || !currentUserId) {
-      return;
-    }
+    const enabled = Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
+    setPushEnabled(enabled);
+  }, []);
 
-    const interval = window.setInterval(() => {
-      const now = Date.now();
-
-      for (const event of events) {
-        if (event.ownerId !== currentUserId || event.allDay) {
-          continue;
-        }
-
-        const startDate = parseEventDate(event.start);
-        if (!startDate) {
-          continue;
-        }
-
-        const reminderAt = startDate.getTime() - 60 * 60 * 1000;
-        const reminderKey = `${currentUserId}:${event.id}:${reminderAt}`;
-
-        if (firedRemindersRef.current.has(reminderKey)) {
-          continue;
-        }
-
-        if (now >= reminderAt && now < startDate.getTime()) {
-          new Notification(`Paaminnelse for ${findUser(event.ownerId)?.name ?? "bruker"}`, {
-            body: `${event.title} starter ${formatDateTime(startDate)}`,
-          });
-          firedRemindersRef.current.add(reminderKey);
-          localStorage.setItem(STORAGE_KEYS.reminders, JSON.stringify([...firedRemindersRef.current]));
-        }
+  const refreshEvents = async () => {
+    setLoadingEvents(true);
+    try {
+      const res = await fetch("/api/events", { cache: "no-store" });
+      if (!res.ok) {
+        return;
       }
-    }, 30_000);
-
-    return () => window.clearInterval(interval);
-  }, [events, currentUserId, notificationPermission]);
+      const data = (await res.json()) as { events: CalendarEvent[] };
+      setEvents(Array.isArray(data.events) ? data.events : []);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
 
   const handleDateClick = (info: DateClickArg) => {
     if (!currentUserId) {
@@ -123,7 +120,7 @@ export default function KalenderClient() {
     setModal({ type: "details", eventId: info.event.id });
   };
 
-  const createEvent = () => {
+  const createEvent = async () => {
     const title = draftTitle.trim();
     if (!title || !modal || modal.type !== "create" || !currentUserId) {
       return;
@@ -135,55 +132,102 @@ export default function KalenderClient() {
 
     const startIso = `${draftDate}T${draftStartTime}:00`;
     const endIso = `${draftDate}T${draftEndTime}:00`;
-
     if (!isAllDay && new Date(endIso).getTime() <= new Date(startIso).getTime()) {
       setCreateError("Sluttid maa vaere senere enn starttid.");
       return;
     }
 
-    const owner = findUser(currentUserId);
-    if (!owner) {
-      return;
-    }
-
-    setEvents((prev) => [
-      ...prev,
-      buildEvent({
-        id: crypto.randomUUID(),
+    const res = await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         title,
-        ownerId: owner.id,
         start: isAllDay ? draftDate : startIso,
         end: isAllDay ? undefined : endIso,
         allDay: isAllDay,
+        ownerId: currentUserId,
       }),
-    ]);
+    });
+
+    if (!res.ok) {
+      setCreateError("Kunne ikke lagre avtalen.");
+      return;
+    }
+
     setModal(null);
+    await refreshEvents();
   };
 
-  const deleteEvent = () => {
+  const deleteEvent = async () => {
     if (!modal || modal.type !== "details") {
       return;
     }
-    setEvents((prev) => prev.filter((event) => event.id !== modal.eventId));
+
+    await fetch(`/api/events/${modal.eventId}`, { method: "DELETE" });
     setModal(null);
+    await refreshEvents();
   };
 
-  const selectUser = (userId: UserId) => {
+  const selectUser = async (userId: UserId) => {
     setCurrentUserId(userId);
-    localStorage.setItem(STORAGE_KEYS.user, userId);
+    localStorage.setItem(STORAGE_KEY_USER, userId);
+    if (notificationPermission === "granted") {
+      await subscribeCurrentDevice(userId);
+    }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await removeCurrentSubscription();
     setCurrentUserId(null);
-    localStorage.removeItem(STORAGE_KEYS.user);
+    localStorage.removeItem(STORAGE_KEY_USER);
   };
 
   const requestNotificationPermission = async () => {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || typeof Notification === "undefined") {
       return;
     }
     const permission = await Notification.requestPermission();
     setNotificationPermission(permission);
+    if (permission === "granted" && currentUserId) {
+      await subscribeCurrentDevice(currentUserId);
+    }
+  };
+
+  const subscribeCurrentDevice = async (userId: UserId) => {
+    const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!publicKey || !swRegistrationRef.current) {
+      return;
+    }
+
+    const subscription = await swRegistrationRef.current.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+
+    await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId,
+        subscription: subscription.toJSON(),
+      }),
+    });
+  };
+
+  const removeCurrentSubscription = async () => {
+    if (!swRegistrationRef.current) {
+      return;
+    }
+    const subscription = await swRegistrationRef.current.pushManager.getSubscription();
+    if (!subscription) {
+      return;
+    }
+    await fetch("/api/push/unsubscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: subscription.endpoint }),
+    });
+    await subscription.unsubscribe();
   };
 
   if (!currentUser) {
@@ -196,7 +240,7 @@ export default function KalenderClient() {
             <button
               key={user.id}
               type="button"
-              onClick={() => selectUser(user.id)}
+              onClick={() => void selectUser(user.id)}
               className="flex items-center justify-between rounded-xl border border-white/10 bg-[#141a29] px-4 py-3 text-left transition hover:-translate-y-0.5 hover:border-white/30"
             >
               <span className="font-medium text-zinc-100">{user.name}</span>
@@ -220,14 +264,15 @@ export default function KalenderClient() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={requestNotificationPermission}
-            className="rounded-xl border border-white/15 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-white/5"
+            onClick={() => void requestNotificationPermission()}
+            disabled={!pushEnabled}
+            className="rounded-xl border border-white/15 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {notificationPermission === "granted" ? "Varsel: aktiv" : "Aktiver varsel"}
+            {notificationPermission === "granted" ? "Push aktiv" : "Aktiver push"}
           </button>
           <button
             type="button"
-            onClick={logout}
+            onClick={() => void logout()}
             className="rounded-xl border border-white/15 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-white/5"
           >
             Bytt bruker
@@ -235,22 +280,26 @@ export default function KalenderClient() {
         </div>
       </div>
 
-      <FullCalendar
-        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-        initialView="timeGridWeek"
-        headerToolbar={{
-          left: "prev,next today",
-          center: "title",
-          right: "dayGridMonth,timeGridWeek,timeGridDay",
-        }}
-        events={events}
-        dateClick={handleDateClick}
-        eventClick={handleEventClick}
-        editable={false}
-        selectable
-        nowIndicator
-        height="auto"
-      />
+      {loadingEvents ? (
+        <div className="rounded-2xl border border-white/10 bg-[#121a2a] p-6 text-sm text-zinc-300">Laster kalender...</div>
+      ) : (
+        <FullCalendar
+          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          initialView="timeGridWeek"
+          headerToolbar={{
+            left: "prev,next today",
+            center: "title",
+            right: "dayGridMonth,timeGridWeek,timeGridDay",
+          }}
+          events={events}
+          dateClick={handleDateClick}
+          eventClick={handleEventClick}
+          editable={false}
+          selectable
+          nowIndicator
+          height="auto"
+        />
+      )}
 
       {modal && (
         <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -331,7 +380,7 @@ export default function KalenderClient() {
                   </button>
                   <button
                     type="button"
-                    onClick={createEvent}
+                    onClick={() => void createEvent()}
                     className="rounded-xl bg-cyan-500 px-4 py-2 font-medium text-black transition hover:bg-cyan-400"
                   >
                     Lagre avtale
@@ -363,7 +412,7 @@ export default function KalenderClient() {
                   </button>
                   <button
                     type="button"
-                    onClick={deleteEvent}
+                    onClick={() => void deleteEvent()}
                     className="rounded-xl bg-rose-500 px-4 py-2 font-medium text-white transition hover:bg-rose-400"
                   >
                     Slett avtale
@@ -378,120 +427,35 @@ export default function KalenderClient() {
   );
 }
 
-function findUser(userId: UserId) {
-  return USERS.find((user) => user.id === userId);
-}
-
-function isUserId(value: string | null): value is UserId {
-  return USERS.some((user) => user.id === value);
-}
-
-function buildEvent(input: {
-  id: string;
-  title: string;
-  ownerId: UserId;
-  start: string;
-  end?: string;
-  allDay?: boolean;
-}): CalendarEvent {
-  const owner = findUser(input.ownerId);
-  return {
-    id: input.id,
-    title: input.title,
-    start: input.start,
-    end: input.end,
-    allDay: input.allDay,
-    ownerId: input.ownerId,
-    backgroundColor: owner?.color,
-    borderColor: owner?.color,
-    textColor: owner?.textColor,
-  };
+function formatDateTime(value: unknown) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  return new Intl.DateTimeFormat("nb-NO", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
 function loadInitialUser(): UserId | null {
   if (typeof window === "undefined") {
     return null;
   }
-  const storedUser = localStorage.getItem(STORAGE_KEYS.user);
-  return isUserId(storedUser) ? storedUser : null;
+  const value = localStorage.getItem(STORAGE_KEY_USER);
+  return isUserId(value) ? value : null;
 }
 
-function loadInitialEvents(): CalendarEvent[] {
-  if (typeof window !== "undefined") {
-    const raw = localStorage.getItem(STORAGE_KEYS.events);
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as CalendarEvent[];
-        if (Array.isArray(parsed)) {
-          return parsed.filter((item) => isUserId(String(item.ownerId)));
-        }
-      } catch {
-        // Ignore malformed local storage and fall back to seed events.
-      }
-    }
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
   }
-
-  return [
-    buildEvent({
-      id: "demo-rino",
-      title: "Fotballtrening",
-      ownerId: "rino",
-      start: "2026-02-22T17:00:00",
-      end: "2026-02-22T18:30:00",
-    }),
-    buildEvent({
-      id: "demo-iselin",
-      title: "Foreldremote",
-      ownerId: "iselin",
-      start: "2026-02-23T19:00:00",
-      end: "2026-02-23T20:00:00",
-    }),
-  ];
-}
-
-function loadNotificationPermission(): NotificationPermission {
-  if (typeof window === "undefined" || typeof Notification === "undefined") {
-    return "default";
-  }
-  return Notification.permission;
-}
-
-function loadReminderKeys() {
-  if (typeof window === "undefined") {
-    return new Set<string>();
-  }
-
-  const raw = localStorage.getItem(STORAGE_KEYS.reminders);
-  if (!raw) {
-    return new Set<string>();
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as string[];
-    return new Set(parsed);
-  } catch {
-    return new Set<string>();
-  }
-}
-
-function parseEventDate(value: unknown) {
-  if (!value) {
-    return null;
-  }
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-  return date;
-}
-
-function formatDateTime(value: unknown) {
-  const date = parseEventDate(value);
-  if (!date) {
-    return "-";
-  }
-  return new Intl.DateTimeFormat("nb-NO", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return outputArray;
 }

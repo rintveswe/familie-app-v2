@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Familie App v2
 
-## Getting Started
+Kalender-app for 5 brukere:
+- Rino
+- Iselin
+- Fia
+- Rakel
+- Hugo
 
-First, run the development server:
+Hver bruker har egen farge, enkel innlogging uten passord, og push-paaminnelser 1 time foer avtale.
+
+## Lokal utvikling
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Ekte push-varsler (ogsaa naar appen er lukket)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+For at dette skal fungere i produksjon paa Vercel, maa disse environment variablene settes:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY`
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT` (f.eks. `mailto:deg@dittdomene.no`)
+- `CRON_SECRET`
+- `UPSTASH_REDIS_REST_URL`
+- `UPSTASH_REDIS_REST_TOKEN`
 
-## Learn More
+En komplett mal ligger i `.env.example`.
 
-To learn more about Next.js, take a look at the following resources:
+### Generer VAPID-nokler
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Kjoer lokalt:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npx web-push generate-vapid-keys
+```
 
-## Deploy on Vercel
+Kopier verdiene inn i Vercel Environment Variables.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Redis (lagring for events + subscriptions)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Legg til Redis-integrasjon i Vercel (Upstash Redis), og kopier URL/TOKEN til:
+
+- `UPSTASH_REDIS_REST_URL`
+- `UPSTASH_REDIS_REST_TOKEN`
+
+### Cron-jobb
+
+`vercel.json` er satt opp med cron hvert 5. minutt:
+
+- `*/5 * * * *` -> `/api/push/reminders`
+
+Jobben sender varsler naer paaminnelsestidspunktet (1 time foer start).
+
+## Deploy
+
+Deploy skjer via git push til `main` (Vercel koblet til repo).
