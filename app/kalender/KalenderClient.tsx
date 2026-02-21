@@ -29,6 +29,8 @@ export default function KalenderClient() {
   const [createError, setCreateError] = useState("");
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [testingPush, setTestingPush] = useState(false);
+  const [testPushMessage, setTestPushMessage] = useState("");
   const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
 
   const selectedEvent = useMemo(() => {
@@ -193,6 +195,29 @@ export default function KalenderClient() {
     }
   };
 
+  const sendTestPush = async () => {
+    if (!currentUserId) {
+      return;
+    }
+    setTestingPush(true);
+    setTestPushMessage("");
+    try {
+      const res = await fetch("/api/push/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: currentUserId }),
+      });
+      if (!res.ok) {
+        setTestPushMessage("Kunne ikke sende test push.");
+        return;
+      }
+      const data = (await res.json()) as { sent?: number };
+      setTestPushMessage(`Test sendt til ${data.sent ?? 0} enhet(er).`);
+    } finally {
+      setTestingPush(false);
+    }
+  };
+
   const subscribeCurrentDevice = async (userId: UserId) => {
     const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     if (!publicKey || !swRegistrationRef.current) {
@@ -272,6 +297,14 @@ export default function KalenderClient() {
           </button>
           <button
             type="button"
+            onClick={() => void sendTestPush()}
+            disabled={!pushEnabled || testingPush}
+            className="rounded-xl border border-white/15 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {testingPush ? "Sender..." : "Test push naa"}
+          </button>
+          <button
+            type="button"
             onClick={() => void logout()}
             className="rounded-xl border border-white/15 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-white/5"
           >
@@ -279,6 +312,7 @@ export default function KalenderClient() {
           </button>
         </div>
       </div>
+      {testPushMessage && <p className="mb-4 text-xs text-zinc-300">{testPushMessage}</p>}
 
       {loadingEvents ? (
         <div className="rounded-2xl border border-white/10 bg-[#121a2a] p-6 text-sm text-zinc-300">Laster kalender...</div>
