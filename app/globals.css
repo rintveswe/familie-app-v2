@@ -86,6 +86,16 @@ body {
   text-transform: capitalize;
 }
 
+.fc .fc-toolbar {
+  gap: 0.5rem;
+}
+
+.fc .fc-toolbar-chunk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
 .fc .fc-daygrid-day,
 .fc .fc-timegrid-slot {
   background: rgba(10, 15, 24, 0.45);
@@ -104,4 +114,57 @@ body {
 
 .fc .fc-timegrid-now-indicator-line {
   border-color: #22d3ee;
+}
+
+.fc .fc-daygrid-day-events {
+  margin: 2px 4px 6px;
+}
+
+.fc .fc-event {
+  border-radius: 0.55rem;
+}
+
+.fc-event-inner {
+  line-height: 1.15;
+  padding: 1px 2px;
+}
+
+.fc-event-owner {
+  font-size: 0.65rem;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.fc-event-title-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.fc-event-description {
+  font-size: 0.68rem;
+  opacity: 0.92;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 768px) {
+  .fc .fc-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .fc .fc-toolbar-title {
+    font-size: 1rem;
+  }
+
+  .fc .fc-button {
+    font-size: 0.78rem;
+    padding: 0.4rem 0.56rem !important;
+  }
+
+  .fc .fc-col-header-cell-cushion,
+  .fc .fc-daygrid-day-number {
+    font-size: 0.76rem;
+  }
 }

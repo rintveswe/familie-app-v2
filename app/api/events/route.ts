@@ -21,6 +21,7 @@ export async function POST(req: Request) {
   const event = {
     id: randomUUID(),
     title: body.title.trim(),
+    description: body.description?.trim() || undefined,
     start: body.start,
     end: body.end,
     allDay: Boolean(body.allDay),

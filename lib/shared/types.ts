@@ -3,6 +3,7 @@ import { UserId } from "./users";
 export type CalendarEvent = {
   id: string;
   title: string;
+  description?: string;
   start: string;
   end?: string;
   allDay?: boolean;
@@ -14,6 +15,7 @@ export type CalendarEvent = {
 
 export type CreateEventInput = {
   title: string;
+  description?: string;
   start: string;
   end?: string;
   allDay?: boolean;

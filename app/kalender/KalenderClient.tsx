@@ -5,14 +5,12 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin, { DateClickArg } from "@fullcalendar/interaction";
-import { EventClickArg } from "@fullcalendar/core";
+import { EventClickArg, EventContentArg } from "@fullcalendar/core";
+import nbLocale from "@fullcalendar/core/locales/nb";
 import { CalendarEvent } from "@/lib/shared/types";
 import { findUser, isUserId, USERS, UserId } from "@/lib/shared/users";
 
-type ModalState =
-  | { type: "create"; date: string }
-  | { type: "details"; eventId: string }
-  | null;
+type ModalState = { type: "create" } | { type: "details"; eventId: string } | null;
 
 const STORAGE_KEY_USER = "familie-app-user-v1";
 
@@ -22,6 +20,7 @@ export default function KalenderClient() {
   const [currentUserId, setCurrentUserId] = useState<UserId | null>(loadInitialUser());
   const [modal, setModal] = useState<ModalState>(null);
   const [draftTitle, setDraftTitle] = useState("");
+  const [draftDescription, setDraftDescription] = useState("");
   const [draftDate, setDraftDate] = useState("");
   const [draftStartTime, setDraftStartTime] = useState("09:00");
   const [draftEndTime, setDraftEndTime] = useState("10:00");
@@ -98,24 +97,30 @@ export default function KalenderClient() {
     }
   };
 
-  const handleDateClick = (info: DateClickArg) => {
+  const openCreateModal = (date?: Date, allDay = false) => {
     if (!currentUserId) {
       return;
     }
 
-    const clickDate = info.date;
-    const date = clickDate.toISOString().slice(0, 10);
-    const hour = String(clickDate.getHours()).padStart(2, "0");
-    const minute = String(clickDate.getMinutes()).padStart(2, "0");
-    const nextHour = String((clickDate.getHours() + 1) % 24).padStart(2, "0");
+    const base = date ?? new Date();
+    const fallbackHour = base.getHours() < 6 ? 9 : base.getHours();
+    const start = new Date(base);
+    start.setHours(fallbackHour, 0, 0, 0);
+    const end = new Date(start);
+    end.setHours(start.getHours() + 1);
 
     setDraftTitle("");
-    setDraftDate(date);
-    setDraftStartTime(`${hour}:${minute}`);
-    setDraftEndTime(`${nextHour}:${minute}`);
-    setIsAllDay(info.allDay);
+    setDraftDescription("");
+    setDraftDate(start.toISOString().slice(0, 10));
+    setDraftStartTime(toTimeInput(start));
+    setDraftEndTime(toTimeInput(end));
+    setIsAllDay(allDay);
     setCreateError("");
-    setModal({ type: "create", date });
+    setModal({ type: "create" });
+  };
+
+  const handleDateClick = (info: DateClickArg) => {
+    openCreateModal(info.date, info.allDay);
   };
 
   const handleEventClick = (info: EventClickArg) => {
@@ -144,6 +149,7 @@ export default function KalenderClient() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title,
+        description: draftDescription.trim() || undefined,
         start: isAllDay ? draftDate : startIso,
         end: isAllDay ? undefined : endIso,
         allDay: isAllDay,
@@ -279,12 +285,21 @@ export default function KalenderClient() {
 
   return (
     <section className="relative rounded-3xl border border-white/10 bg-[#0f1320]/90 p-3 shadow-[0_24px_80px_rgba(0,0,0,0.5)] md:p-6">
-      <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-white/10 bg-[#131a2a]/80 p-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-3">
-          <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: currentUser.color }} />
-          <p className="text-sm text-zinc-200">
-            Innlogget som <span className="font-semibold">{currentUser.name}</span>
-          </p>
+      <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-white/10 bg-[#131a2a]/80 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: currentUser.color }} />
+            <p className="text-sm text-zinc-200">
+              Innlogget som <span className="font-semibold">{currentUser.name}</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => openCreateModal()}
+            className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-cyan-400"
+          >
+            Legg til avtale
+          </button>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -319,18 +334,30 @@ export default function KalenderClient() {
       ) : (
         <FullCalendar
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-          initialView="timeGridWeek"
+          locale={nbLocale}
+          firstDay={1}
+          initialView="dayGridMonth"
           headerToolbar={{
             left: "prev,next today",
             center: "title",
             right: "dayGridMonth,timeGridWeek,timeGridDay",
           }}
+          buttonText={{
+            today: "I dag",
+            month: "Maaned",
+            week: "Uke",
+            day: "Dag",
+          }}
+          noEventsText="Ingen avtaler i denne perioden"
+          allDayText="Hele dagen"
           events={events}
           dateClick={handleDateClick}
           eventClick={handleEventClick}
+          eventContent={renderEventContent}
           editable={false}
           selectable
           nowIndicator
+          dayMaxEventRows
           height="auto"
         />
       )}
@@ -340,7 +367,7 @@ export default function KalenderClient() {
           <div className="modal-card w-full max-w-md rounded-2xl border border-white/10 bg-[#161b28] p-6">
             {modal.type === "create" ? (
               <>
-                <h2 className="text-xl font-semibold text-zinc-100">Opprett avtale</h2>
+                <h2 className="text-xl font-semibold text-zinc-100">Ny avtale</h2>
                 <p className="mt-2 text-sm text-zinc-400">Bruker: {currentUser.name}</p>
                 <label className="mt-4 block text-sm font-medium text-zinc-300" htmlFor="eventTitle">
                   Tittel
@@ -352,8 +379,19 @@ export default function KalenderClient() {
                   placeholder="F.eks. Legetime"
                   className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1320] px-4 py-2 text-zinc-100 outline-none ring-cyan-400/50 transition focus:ring"
                 />
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <div className="sm:col-span-3">
+                <label className="mt-4 block text-sm font-medium text-zinc-300" htmlFor="eventDescription">
+                  Info (valgfritt)
+                </label>
+                <textarea
+                  id="eventDescription"
+                  value={draftDescription}
+                  onChange={(e) => setDraftDescription(e.target.value)}
+                  placeholder="F.eks. Ta med gymtoey"
+                  rows={3}
+                  className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-[#0f1320] px-4 py-2 text-zinc-100 outline-none ring-cyan-400/50 transition focus:ring"
+                />
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
                     <label className="block text-sm font-medium text-zinc-300" htmlFor="eventDate">
                       Dato
                     </label>
@@ -365,7 +403,7 @@ export default function KalenderClient() {
                       className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f1320] px-4 py-2 text-zinc-100 outline-none ring-cyan-400/50 transition focus:ring"
                     />
                   </div>
-                  <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0f1320] px-3 py-2 text-sm text-zinc-200 sm:col-span-3">
+                  <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0f1320] px-3 py-2 text-sm text-zinc-200 sm:col-span-2">
                     <input
                       type="checkbox"
                       checked={isAllDay}
@@ -378,7 +416,7 @@ export default function KalenderClient() {
                     <>
                       <div>
                         <label className="block text-sm font-medium text-zinc-300" htmlFor="startTime">
-                          Start
+                          Fra
                         </label>
                         <input
                           id="startTime"
@@ -390,7 +428,7 @@ export default function KalenderClient() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-zinc-300" htmlFor="endTime">
-                          Slutt
+                          Til
                         </label>
                         <input
                           id="endTime"
@@ -425,16 +463,17 @@ export default function KalenderClient() {
               <>
                 <h2 className="text-xl font-semibold text-zinc-100">Avtaledetaljer</h2>
                 <p className="mt-3 text-zinc-200">{selectedEvent?.title ?? "Ukjent avtale"}</p>
-                <p className="mt-1 text-sm text-zinc-400">
+                {selectedEvent?.description && <p className="mt-2 text-sm text-zinc-300">{selectedEvent.description}</p>}
+                <p className="mt-2 text-sm text-zinc-400">
                   Eier: {selectedEvent ? findUser(selectedEvent.ownerId)?.name ?? "Ukjent" : "Ukjent"}
                 </p>
                 <p className="mt-1 text-sm text-zinc-400">
                   {selectedEvent?.allDay
                     ? `Heldag: ${String(selectedEvent.start).slice(0, 10)}`
-                    : `Start: ${formatDateTime(selectedEvent?.start)}`}
+                    : `Fra: ${formatDateTime(selectedEvent?.start)}`}
                 </p>
                 <p className="mt-1 text-sm text-zinc-400">
-                  {selectedEvent?.allDay ? "Slutt: -" : `Slutt: ${formatDateTime(selectedEvent?.end)}`}
+                  {selectedEvent?.allDay ? "Til: -" : `Til: ${formatDateTime(selectedEvent?.end)}`}
                 </p>
                 <div className="mt-6 flex justify-end gap-3">
                   <button
@@ -458,6 +497,21 @@ export default function KalenderClient() {
         </div>
       )}
     </section>
+  );
+}
+
+function renderEventContent(arg: EventContentArg) {
+  const ownerId = String(arg.event.extendedProps.ownerId);
+  const owner = isUserId(ownerId) ? findUser(ownerId) : undefined;
+  const description =
+    typeof arg.event.extendedProps.description === "string" ? arg.event.extendedProps.description : "";
+
+  return (
+    <div className="fc-event-inner">
+      <div className="fc-event-owner">{owner?.name ?? "Familie"}</div>
+      <div className="fc-event-title-text">{arg.event.title}</div>
+      {description && <div className="fc-event-description">{description}</div>}
+    </div>
   );
 }
 
@@ -492,4 +546,8 @@ function urlBase64ToUint8Array(base64String: string) {
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
+}
+
+function toTimeInput(value: Date) {
+  return `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
 }
