@@ -123,6 +123,11 @@ export default function KalenderClient() {
     openCreateModal(info.date, info.allDay);
   };
 
+  const handleAddEventClick = async () => {
+    await ensurePushPermissionOnAdd();
+    openCreateModal();
+  };
+
   const handleEventClick = (info: EventClickArg) => {
     setModal({ type: "details", eventId: info.event.id });
   };
@@ -190,8 +195,18 @@ export default function KalenderClient() {
     localStorage.removeItem(STORAGE_KEY_USER);
   };
 
-  const requestNotificationPermission = async () => {
+  const ensurePushPermissionOnAdd = async () => {
     if (typeof window === "undefined" || typeof Notification === "undefined") {
+      return;
+    }
+    if (!pushEnabled || !currentUserId) {
+      return;
+    }
+    if (Notification.permission === "denied") {
+      return;
+    }
+    if (Notification.permission === "granted") {
+      await subscribeCurrentDevice(currentUserId);
       return;
     }
     const permission = await Notification.requestPermission();
@@ -293,23 +308,24 @@ export default function KalenderClient() {
               Innlogget som <span className="font-semibold">{currentUser.name}</span>
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => openCreateModal()}
-            className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-cyan-400"
-          >
-            Legg til avtale
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleAddEventClick()}
+              className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-cyan-400"
+            >
+              Legg til avtale
+            </button>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="rounded-xl border border-white/15 px-3 py-2 text-sm text-zinc-200 transition hover:bg-white/5"
+            >
+              Bytt bruker
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => void requestNotificationPermission()}
-            disabled={!pushEnabled}
-            className="rounded-xl border border-white/15 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {notificationPermission === "granted" ? "Push aktiv" : "Aktiver push"}
-          </button>
           <button
             type="button"
             onClick={() => void sendTestPush()}
@@ -318,13 +334,9 @@ export default function KalenderClient() {
           >
             {testingPush ? "Sender..." : "Test push naa"}
           </button>
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="rounded-xl border border-white/15 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-white/5"
-          >
-            Bytt bruker
-          </button>
+          {notificationPermission === "denied" && (
+            <p className="self-center text-xs text-zinc-400">Push er blokkert i nettleseren.</p>
+          )}
         </div>
       </div>
       {testPushMessage && <p className="mb-4 text-xs text-zinc-300">{testPushMessage}</p>}
@@ -562,5 +574,6 @@ function shortText(value: string, maxLen: number) {
   if (value.length <= maxLen) {
     return value;
   }
-  return `${value.slice(0, maxLen - 1)}…`;
+  return `${value.slice(0, Math.max(1, maxLen - 3))}...`;
 }
+
