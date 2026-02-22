@@ -54,7 +54,7 @@ async function runReminderJob(req: Request) {
 
       try {
         await sendPush(target.subscription, {
-          title: `Paaminnelse for ${findUser(event.ownerId)?.name ?? "familie"}`,
+          title: `Påminnelse for ${findUser(event.ownerId)?.name ?? "familie"}`,
           body: `${event.title} starter ${formatDateTime(event.start)}`,
           url: "/kalender",
         });

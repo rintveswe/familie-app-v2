@@ -10,7 +10,7 @@ self.addEventListener("push", (event) => {
 
   const title = payload.title || "Familie App";
   const options = {
-    body: payload.body || "Ny paaminnelse",
+    body: payload.body || "Ny påminnelse",
     data: {
       url: payload.url || "/kalender",
     },

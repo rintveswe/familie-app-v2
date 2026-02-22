@@ -145,7 +145,7 @@ export default function KalenderClient() {
     const startIso = `${draftDate}T${draftStartTime}:00`;
     const endIso = `${draftDate}T${draftEndTime}:00`;
     if (!isAllDay && new Date(endIso).getTime() <= new Date(startIso).getTime()) {
-      setCreateError("Sluttid maa vaere senere enn starttid.");
+      setCreateError("Sluttid må være senere enn starttid.");
       return;
     }
 
@@ -280,7 +280,7 @@ export default function KalenderClient() {
     return (
       <section className="rounded-3xl border border-white/10 bg-[#0f1320]/90 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
         <h2 className="text-2xl font-semibold text-zinc-100">Velg bruker</h2>
-        <p className="mt-2 text-sm text-zinc-400">Logg inn uten passord ved aa velge navn.</p>
+        <p className="mt-2 text-sm text-zinc-400">Logg inn uten passord ved å velge navn.</p>
         <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {USERS.map((user) => (
             <button
@@ -332,7 +332,7 @@ export default function KalenderClient() {
             disabled={!pushEnabled || testingPush}
             className="rounded-xl border border-white/15 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {testingPush ? "Sender..." : "Test push naa"}
+            {testingPush ? "Sender..." : "Test push nå"}
           </button>
           {notificationPermission === "denied" && (
             <p className="self-center text-xs text-zinc-400">Push er blokkert i nettleseren.</p>
@@ -356,7 +356,7 @@ export default function KalenderClient() {
           }}
           buttonText={{
             today: "I dag",
-            month: "Maaned",
+            month: "Måned",
             week: "Uke",
             day: "Dag",
           }}
@@ -398,7 +398,7 @@ export default function KalenderClient() {
                   id="eventDescription"
                   value={draftDescription}
                   onChange={(e) => setDraftDescription(e.target.value)}
-                  placeholder="F.eks. Ta med gymtoey"
+                  placeholder="F.eks. Ta med gymtøy"
                   rows={3}
                   className="mt-2 w-full resize-none rounded-xl border border-white/10 bg-[#0f1320] px-4 py-2 text-zinc-100 outline-none ring-cyan-400/50 transition focus:ring"
                 />
