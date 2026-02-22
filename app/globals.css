@@ -135,42 +135,12 @@ body {
   max-width: 100%;
   overflow: hidden;
   line-height: 1.15;
-  padding: 1px 2px;
-}
-
-.fc-event-owner-row {
-  display: flex;
-  align-items: center;
-  gap: 0.24rem;
-}
-
-.fc-event-owner-dot {
-  flex: 0 0 auto;
-  width: 0.38rem;
-  height: 0.38rem;
-  border-radius: 999px;
-}
-
-.fc-event-owner {
-  font-size: 0.65rem;
-  font-weight: 700;
-  opacity: 0.9;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  padding: 2px 4px;
 }
 
 .fc-event-title-text {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.fc-event-description {
-  font-size: 0.68rem;
-  opacity: 0.92;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -196,15 +166,7 @@ body {
     font-size: 0.76rem;
   }
 
-  .fc-event-owner {
-    font-size: 0.61rem;
-  }
-
   .fc-event-title-text {
     font-size: 0.68rem;
-  }
-
-  .fc-event-description {
-    display: none;
   }
 }

@@ -366,6 +366,8 @@ export default function KalenderClient() {
           dateClick={handleDateClick}
           eventClick={handleEventClick}
           eventContent={renderEventContent}
+          eventDisplay="block"
+          displayEventTime={false}
           editable={false}
           selectable
           nowIndicator
@@ -516,19 +518,13 @@ function renderEventContent(arg: EventContentArg) {
   const ownerId = String(arg.event.extendedProps.ownerId);
   const owner = isUserId(ownerId) ? findUser(ownerId) : undefined;
   const isMonthView = arg.view.type === "dayGridMonth";
-  const description =
-    typeof arg.event.extendedProps.description === "string" ? arg.event.extendedProps.description : "";
   const eventTextColor = (arg.event.textColor as string) || owner?.textColor || "#09111f";
-  const ownerColor = owner?.color || "#cbd5e1";
+  const ownerName = owner?.name ?? "Familie";
+  const primaryLine = `${ownerName} - ${arg.event.title}`;
 
   return (
     <div className="fc-event-inner" style={{ color: eventTextColor }}>
-      <div className="fc-event-owner-row">
-        <span className="fc-event-owner-dot" style={{ backgroundColor: ownerColor }} />
-        <span className="fc-event-owner">{owner?.name ?? "Familie"}</span>
-      </div>
-      <div className="fc-event-title-text">{shortText(arg.event.title, isMonthView ? 24 : 44)}</div>
-      {!isMonthView && description && <div className="fc-event-description">{shortText(description, 54)}</div>}
+      <div className="fc-event-title-text">{shortText(primaryLine, isMonthView ? 28 : 54)}</div>
     </div>
   );
 }
