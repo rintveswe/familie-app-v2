@@ -503,14 +503,20 @@ export default function KalenderClient() {
 function renderEventContent(arg: EventContentArg) {
   const ownerId = String(arg.event.extendedProps.ownerId);
   const owner = isUserId(ownerId) ? findUser(ownerId) : undefined;
+  const isMonthView = arg.view.type === "dayGridMonth";
   const description =
     typeof arg.event.extendedProps.description === "string" ? arg.event.extendedProps.description : "";
+  const eventTextColor = (arg.event.textColor as string) || owner?.textColor || "#09111f";
+  const ownerColor = owner?.color || "#cbd5e1";
 
   return (
-    <div className="fc-event-inner">
-      <div className="fc-event-owner">{owner?.name ?? "Familie"}</div>
-      <div className="fc-event-title-text">{arg.event.title}</div>
-      {description && <div className="fc-event-description">{description}</div>}
+    <div className="fc-event-inner" style={{ color: eventTextColor }}>
+      <div className="fc-event-owner-row">
+        <span className="fc-event-owner-dot" style={{ backgroundColor: ownerColor }} />
+        <span className="fc-event-owner">{owner?.name ?? "Familie"}</span>
+      </div>
+      <div className="fc-event-title-text">{shortText(arg.event.title, isMonthView ? 24 : 44)}</div>
+      {!isMonthView && description && <div className="fc-event-description">{shortText(description, 54)}</div>}
     </div>
   );
 }
@@ -550,4 +556,11 @@ function urlBase64ToUint8Array(base64String: string) {
 
 function toTimeInput(value: Date) {
   return `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
+}
+
+function shortText(value: string, maxLen: number) {
+  if (value.length <= maxLen) {
+    return value;
+  }
+  return `${value.slice(0, maxLen - 1)}…`;
 }
